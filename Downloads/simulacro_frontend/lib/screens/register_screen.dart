@@ -190,6 +190,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                 value: 2,
                                 child: Text('Empresa'),
                               ),
+
                             ],
                             onChanged: (v) => setState(() => _rol = v ?? 1),
                           ),

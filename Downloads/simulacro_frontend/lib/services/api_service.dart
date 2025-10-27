@@ -82,6 +82,8 @@ extension CarritoApi on ApiService {
   Future<List<CarritoResponseDto>> getCarrito() async {
     final url = Uri.parse('$_baseUrl/carritos');
     final res = await http.get(url, headers: _headers);
+
+    if (res.statusCode == 404) return <CarritoResponseDto>[];
     if (res.statusCode != 200) {
       throw Exception('No se pudo obtener el carrito (${res.statusCode})');
     }
