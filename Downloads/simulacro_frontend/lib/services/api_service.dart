@@ -84,6 +84,7 @@ extension CarritoApi on ApiService {
     final res = await http.get(url, headers: _headers);
 
     if (res.statusCode == 404) return <CarritoResponseDto>[];
+
     if (res.statusCode != 200) {
       throw Exception('No se pudo obtener el carrito (${res.statusCode})');
     }
@@ -117,13 +118,59 @@ extension CarritoApi on ApiService {
   Future<List<CarritoResponseDto>> removeFromCarrito(int itemId) async {
     final url = Uri.parse('$_baseUrl/carritos/$itemId');
     final res = await http.delete(url, headers: _headers);
-    if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('No se pudo eliminar del carrito (${res.statusCode})');
+
+    // 204 No Content (lo más común en DELETE)
+    if (res.statusCode == 204) {
+      return await getCarrito();
     }
-    final List data = jsonDecode(res.body);
-    return data
-        .map((e) => CarritoResponseDto.fromJson(Map<String, dynamic>.from(e)))
-        .toList();
+
+    // 2xx con o sin cuerpo
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      final body = res.body;
+
+      // A veces llega vacío o con espacios -> no intentes parsear
+      if (body.isEmpty || body.trim().isEmpty) {
+        return await getCarrito();
+      }
+
+      // Intentar parsear; si falla, fallback a getCarrito()
+      try {
+        final decoded = jsonDecode(body);
+
+        // Caso habitual: backend devuelve array de items
+        if (decoded is List) {
+          return decoded
+              .map(
+                (e) =>
+                    CarritoResponseDto.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList();
+        }
+
+        // Soporte opcional: si viniera un objeto con 'items'
+        if (decoded is Map && decoded['items'] is List) {
+          final items = List.from(decoded['items']);
+          return items
+              .map(
+                (e) =>
+                    CarritoResponseDto.fromJson(Map<String, dynamic>.from(e)),
+              )
+              .toList();
+        }
+
+        // Si no es lista ni objeto esperado, recarga estado del carrito
+        return await getCarrito();
+      } catch (_) {
+        return await getCarrito();
+      }
+    }
+
+    // Errores comunes
+    if (res.statusCode == 404) {
+      throw Exception('No se encontró el ítem en tu carrito (404)');
+    }
+
+    throw Exception('No se pudo eliminar del carrito (${res.statusCode})');
   }
 
   /// POST /api/carritos/checkout  -> { total: number, mensaje: string? }
@@ -182,7 +229,7 @@ extension ProductosEmpresaApi on ApiService {
   Future<void> eliminarProducto(int id) async {
     final url = Uri.parse('$_baseUrl/productos/$id');
     final res = await http.delete(url, headers: _headers);
-    if (res.statusCode != 204) {
+    if (res.statusCode != 204 && res.statusCode != 204) {
       throw Exception('No se pudo eliminar (${res.statusCode})');
     }
   }
